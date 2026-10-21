@@ -1,0 +1,61 @@
+# High-rate sensor and state streams (ROS 2 Humble topics).
+# Both SPINE (real robot) and DOJO (simulator) must publish these with the same
+# names, types, frames, and minimum rates. The stream contract test checks them.
+version: 1
+frames:
+  # REP-105 tree
+  - map -> odom          # published by ATLAS
+  - odom -> base_link    # published by SPINE / DOJO
+  - base_link -> head_camera_link, lidar_link, left_hand_link, right_hand_link  # SPINE / DOJO (from URDF + joints)
+streams:
+  - topic: /mf/robot/joint_states
+    type: sensor_msgs/msg/JointState
+    min_rate_hz: 100
+    owner: spine
+  - topic: /tf
+    type: tf2_msgs/msg/TFMessage
+    min_rate_hz: 50
+    owner: spine
+  - topic: /tf_static
+    type: tf2_msgs/msg/TFMessage
+    qos: transient_local
+    owner: spine
+  - topic: /mf/robot/imu
+    type: sensor_msgs/msg/Imu
+    min_rate_hz: 200
+    frame: imu_link
+    owner: spine
+  - topic: /mf/robot/odom
+    type: nav_msgs/msg/Odometry
+    min_rate_hz: 50
+    frame: odom
+    owner: spine
+  - topic: /mf/sensors/lidar/points
+    type: sensor_msgs/msg/PointCloud2
+    min_rate_hz: 10
+    frame: lidar_link
+    owner: spine
+  - topic: /mf/sensors/head_camera/color/image_raw
+    type: sensor_msgs/msg/Image
+    min_rate_hz: 15
+    frame: head_camera_color_optical_frame
+    owner: spine
+  - topic: /mf/sensors/head_camera/aligned_depth/image_raw
+    type: sensor_msgs/msg/Image
+    min_rate_hz: 15
+    frame: head_camera_color_optical_frame
+    owner: spine
+  - topic: /mf/sensors/head_camera/color/camera_info
+    type: sensor_msgs/msg/CameraInfo
+    min_rate_hz: 15
+    owner: spine
+  - topic: /mf/world/map_grid
+    type: nav_msgs/msg/OccupancyGrid
+    qos: transient_local
+    frame: map
+    owner: atlas
+  - topic: /mf/world/pose
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    min_rate_hz: 10
+    frame: map
+    owner: atlas

@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package mindframe.navigation.v1;
+
+import "mindframe/common/v1/common.proto";
+
+// NavigationService moves the robot base. Implemented by STRIDE.
+// STRIDE sends velocity commands only through RobotService.
+service NavigationService {
+  // Skill: go to a named place or a pose.
+  // Streams zero or more progress events, then exactly one result.
+  rpc NavigateTo(NavigateToRequest) returns (stream NavigateToResponse);
+
+  // Skill: fine alignment in front of a surface, for manipulation.
+  rpc Dock(DockRequest) returns (stream DockResponse);
+
+  // Cancel a running NavigateTo or Dock by request_id.
+  rpc CancelMotion(CancelMotionRequest) returns (CancelMotionResponse);
+}
+
+message NavigateToRequest {
+  mindframe.common.v1.RequestHeader header = 1;
+  oneof target {
+    // Place ID from WorldModelService. STRIDE uses its approach pose.
+    string place_id = 2;
+    // Explicit goal in frame "map".
+    mindframe.common.v1.Pose2D pose = 3;
+  }
+  // Goal tolerance. 0 means default (0.15 m, 0.2 rad).
+  double position_tolerance = 4;
+  double yaw_tolerance = 5;
+  // 0.0 to 1.0 of the profile speed limit. 0 means 1.0.
+  float speed_scale = 6;
+}
+
+message NavigateToResponse {
+  oneof event {
+    mindframe.common.v1.Progress progress = 1;
+    NavigateToResult result = 2;
+  }
+}
+
+message NavigateToResult {
+  mindframe.common.v1.SkillResult result = 1;
+  mindframe.common.v1.Pose2D final_pose = 2;
+  // Meters.
+  double distance_travelled = 3;
+}
+
+message DockRequest {
+  mindframe.common.v1.RequestHeader header = 1;
+  // Surface place ID.
+  string place_id = 2;
+  // Distance from the robot front to the surface edge. 0 means default (0.35 m).
+  double standoff = 3;
+}
+
+message DockResponse {
+  oneof event {
+    mindframe.common.v1.Progress progress = 1;
+    DockResult result = 2;
+  }
+}
+
+message DockResult {
+  mindframe.common.v1.SkillResult result = 1;
+  mindframe.common.v1.Pose2D final_pose = 2;
+  // Measured distance to the surface edge, meters.
+  double measured_standoff = 3;
+}
+
+message CancelMotionRequest {
+  string request_id = 1;
+}
+
+message CancelMotionResponse {
+  bool accepted = 1;
+}

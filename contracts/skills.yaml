@@ -1,0 +1,107 @@
+# Skill catalog: the ONLY skills CORTEX may put in a plan.
+# CORTEX gives this file to the LLM (as tool definitions) and to the validator.
+# Each skill maps to exactly one gRPC method. Arguments are JSON Schema.
+# Owner: tech lead. Changes need approval from CORTEX and the skill owner.
+version: 1
+skills:
+  navigate_to:
+    description: Walk to a named place. The robot stops at the place's approach pose.
+    rpc: mindframe.navigation.v1.NavigationService/NavigateTo
+    owner: stride
+    args:
+      type: object
+      required: [place_id]
+      additionalProperties: false
+      properties:
+        place_id: {type: string, description: "ID from WorldModelService.ListPlaces"}
+    preconditions: [localized]
+    effects: [robot_at(place_id)]
+    timeout_s: 180
+
+  dock:
+    description: Align precisely in front of a surface before pick or place.
+    rpc: mindframe.navigation.v1.NavigationService/Dock
+    owner: stride
+    args:
+      type: object
+      required: [place_id]
+      additionalProperties: false
+      properties:
+        place_id: {type: string}
+    preconditions: [robot_at(place_id)]
+    effects: [docked(place_id)]
+    timeout_s: 30
+
+  find_object:
+    description: Look for an object matching a text query on or near a place. Returns an object_id.
+    rpc: mindframe.perception.v1.PerceptionService/FindObjects
+    owner: iris
+    args:
+      type: object
+      required: [query]
+      additionalProperties: false
+      properties:
+        query: {type: string, description: "for example 'cup' or 'red mug'"}
+        place_id: {type: string}
+    returns: object_id
+    preconditions: []
+    effects: [known(object)]
+    timeout_s: 15
+
+  pick:
+    description: Grasp an object found by find_object and lift it.
+    rpc: mindframe.manipulation.v1.ManipulationService/Pick
+    owner: grip
+    args:
+      type: object
+      required: [object_id]
+      additionalProperties: false
+      properties:
+        object_id: {type: string}
+        arm: {type: string, enum: [left, right, auto], default: auto}
+    preconditions: [hand_empty, docked(any), known(object_id)]
+    effects: [holding(object_id)]
+    timeout_s: 60
+
+  place:
+    description: Put the held object on a surface.
+    rpc: mindframe.manipulation.v1.ManipulationService/Place
+    owner: grip
+    args:
+      type: object
+      required: [place_id]
+      additionalProperties: false
+      properties:
+        place_id: {type: string}
+        arm: {type: string, enum: [left, right, auto], default: auto}
+    preconditions: [holding(any), docked(place_id)]
+    effects: [hand_empty, on(object, place_id)]
+    timeout_s: 60
+
+  look_at_place:
+    description: Turn the head toward a place to observe it.
+    rpc: mindframe.robot.v1.RobotService/LookAt
+    owner: spine
+    args:
+      type: object
+      required: [place_id]
+      additionalProperties: false
+      properties:
+        place_id: {type: string}
+    preconditions: []
+    effects: []
+    timeout_s: 10
+
+  say:
+    description: Speak a short message to people nearby.
+    rpc: hub.speech/Say   # HUB-internal, not a robot motion
+    owner: hub
+    args:
+      type: object
+      required: [text]
+      additionalProperties: false
+      properties:
+        text: {type: string, maxLength: 200}
+    preconditions: []
+    effects: []
+    timeout_s: 20

@@ -1,0 +1,179 @@
+syntax = "proto3";
+
+package mindframe.robot.v1;
+
+import "google/protobuf/timestamp.proto";
+import "mindframe/common/v1/common.proto";
+
+// RobotService is the ONLY way to command the robot.
+// Implemented by SPINE (real G1) and by DOJO (simulator). Both must pass the
+// same contract tests, so other subsystems cannot tell them apart.
+service RobotService {
+  // Robot mode state machine (RFC-0006 §3.1).
+  rpc SetMode(SetModeRequest) returns (SetModeResponse);
+
+  // Snapshot or stream of robot state (mode, battery, faults, base pose).
+  rpc GetState(GetStateRequest) returns (GetStateResponse);
+  rpc StreamState(StreamStateRequest) returns (stream StreamStateResponse);
+
+  // Base velocity. The client must send at least every 100 ms.
+  // The server stops the base when no message arrives for 200 ms (watchdog).
+  rpc StreamBaseVelocity(stream StreamBaseVelocityRequest) returns (StreamBaseVelocityResponse);
+
+  // Arm joint targets. Same watchdog rule as base velocity.
+  rpc StreamArmCommand(stream StreamArmCommandRequest) returns (StreamArmCommandResponse);
+  rpc SetHand(SetHandRequest) returns (SetHandResponse);
+
+  // Point the head camera at a target.
+  rpc LookAt(LookAtRequest) returns (LookAtResponse);
+
+  // Software emergency stop. Latched until ClearEStop is called.
+  rpc EStop(EStopRequest) returns (EStopResponse);
+  rpc ClearEStop(ClearEStopRequest) returns (ClearEStopResponse);
+}
+
+enum Mode {
+  MODE_UNSPECIFIED = 0;
+  // Motors are passive. Safe default at boot.
+  MODE_DAMP = 1;
+  MODE_STAND_UP = 2;
+  // Standing, balancing, accepts commands.
+  MODE_READY = 3;
+  MODE_WALKING = 4;
+  // Base locked, arms accept commands.
+  MODE_MANIPULATING = 5;
+  // Stopped by e-stop or fault. Standing still if possible.
+  MODE_SAFE_STOP = 6;
+}
+
+enum Arm {
+  ARM_UNSPECIFIED = 0;
+  ARM_LEFT = 1;
+  ARM_RIGHT = 2;
+}
+
+message RobotState {
+  google.protobuf.Timestamp stamp = 1;
+  Mode mode = 2;
+  bool estop_active = 3;
+  // 0.0 to 1.0.
+  float battery_fraction = 4;
+  // Active fault codes, for example "motor_overtemp:left_elbow".
+  repeated string faults = 5;
+  // Odometry pose in frame "odom".
+  mindframe.common.v1.PoseStamped odom_pose = 6;
+  // Measured base velocity in frame "base_link". m/s and rad/s.
+  float vx = 7;
+  float vy = 8;
+  float vyaw = 9;
+}
+
+message CommandAck {
+  mindframe.common.v1.SkillResult result = 1;
+  // Number of commands that the server clamped or rejected for limits.
+  uint32 clamped_count = 2;
+  uint32 rejected_count = 3;
+}
+
+message SetModeRequest {
+  mindframe.common.v1.RequestHeader header = 1;
+  Mode mode = 2;
+}
+
+message SetModeResponse {
+  mindframe.common.v1.SkillResult result = 1;
+  Mode mode = 2;
+}
+
+message GetStateRequest {}
+
+message GetStateResponse {
+  RobotState state = 1;
+}
+
+message StreamStateRequest {
+  // Maximum publish rate. 0 means server default (10 Hz).
+  float rate_hz = 1;
+}
+
+message StreamStateResponse {
+  RobotState state = 1;
+}
+
+message StreamBaseVelocityRequest {
+  // In frame "base_link". m/s and rad/s. The server clamps to configured limits.
+  float vx = 1;
+  float vy = 2;
+  float vyaw = 3;
+  string caller = 4;
+}
+
+message StreamBaseVelocityResponse {
+  CommandAck ack = 1;
+}
+
+message StreamArmCommandRequest {
+  Arm arm = 1;
+  // Joint names follow the G1 URDF in mf_description.
+  repeated string joint_names = 2;
+  // Radians.
+  repeated double positions = 3;
+  // Radians per second. Optional feed-forward.
+  repeated double velocities = 4;
+  // Optional stiffness and damping per joint. Empty means profile default.
+  repeated double kp = 5;
+  repeated double kd = 6;
+  string caller = 7;
+}
+
+message StreamArmCommandResponse {
+  CommandAck ack = 1;
+}
+
+message SetHandRequest {
+  mindframe.common.v1.RequestHeader header = 1;
+  Arm arm = 2;
+  enum Action {
+    ACTION_UNSPECIFIED = 0;
+    ACTION_OPEN = 1;
+    ACTION_CLOSE = 2;
+    // Use joint_positions.
+    ACTION_POSITION = 3;
+  }
+  Action action = 3;
+  // 0.0 to 1.0 of the maximum allowed grip force.
+  float force_fraction = 4;
+  repeated double joint_positions = 5;
+}
+
+message SetHandResponse {
+  mindframe.common.v1.SkillResult result = 1;
+  // True if the hand stopped before fully closing (object detected).
+  bool contact_detected = 2;
+}
+
+message LookAtRequest {
+  mindframe.common.v1.RequestHeader header = 1;
+  mindframe.common.v1.PoseStamped target = 2;
+}
+
+message LookAtResponse {
+  mindframe.common.v1.SkillResult result = 1;
+}
+
+message EStopRequest {
+  string caller = 1;
+  string reason = 2;
+}
+
+message EStopResponse {
+  bool active = 1;
+}
+
+message ClearEStopRequest {
+  string caller = 1;
+}
+
+message ClearEStopResponse {
+  bool active = 1;
+}

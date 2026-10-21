@@ -1,0 +1,39 @@
+# Registry of SkillResult.reason values. Use only these strings.
+# CORTEX recovery logic and DOJO failure statistics depend on them.
+# Add new reasons by PR. Never rename or remove a reason.
+version: 1
+reasons:
+  # common
+  ok: Success.
+  cancelled: Cancelled by caller or operator.
+  estop: E-stop is active.
+  invalid_argument: Request did not match the contract.
+  dependency_unavailable: A required service did not respond.
+  internal_error: Unexpected server error. See logs with task_id.
+  # world / localization
+  unknown_place: place_id is not in the world model.
+  not_localized: Robot position is unknown.
+  # perception
+  object_not_found: No matching object above min_confidence.
+  object_ambiguous: Several objects match and the query cannot choose.
+  surface_not_found: No support plane found at the place.
+  no_free_space: Surface has no free area large enough.
+  # navigation
+  path_blocked: No collision-free path.
+  goal_unreachable: Goal is outside the map or inside an obstacle.
+  stuck: Robot did not make progress for the configured time.
+  dock_failed: Could not reach the docking tolerance.
+  # manipulation
+  out_of_reach: No IK solution for any grasp candidate.
+  grasp_failed: Hand closed but no object detected.
+  object_dropped: Object lost while lifting or carrying.
+  hand_not_empty: Pick requested while already holding an object.
+  not_holding: Place requested with an empty hand.
+  # robot
+  mode_rejected: Command not allowed in current robot mode.
+  limit_violation: Command exceeded safety limits.
+  low_battery: Battery below the task threshold.
+  hardware_fault: Motor, sensor, or communication fault.
+  # task
+  plan_invalid: Planner output failed validation.
+  clarification_needed: Instruction is ambiguous; question sent to operator.

@@ -1,0 +1,120 @@
+syntax = "proto3";
+
+package mindframe.common.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+// Header sent with every request. Used for tracing, cancellation, and logs.
+message RequestHeader {
+  // ID of the user task. Same for all calls that belong to one instruction.
+  // Also used as the OpenTelemetry trace ID.
+  string task_id = 1;
+  // Unique ID of this call. Used by Cancel().
+  string request_id = 2;
+  // The server must stop and return DEADLINE_EXCEEDED after this time.
+  google.protobuf.Timestamp deadline = 3;
+  // Name of the calling subsystem, for example "cortex".
+  string caller = 4;
+}
+
+// Final outcome of every skill call.
+message SkillResult {
+  enum Code {
+    CODE_UNSPECIFIED = 0;
+    CODE_SUCCESS = 1;
+    // The caller may retry or replan.
+    CODE_FAILED_RECOVERABLE = 2;
+    // The caller must stop and ask the operator.
+    CODE_FAILED_FATAL = 3;
+    CODE_CANCELLED = 4;
+    CODE_DEADLINE_EXCEEDED = 5;
+  }
+  Code code = 1;
+  // Machine-readable reason from the registry in contracts/reasons.yaml,
+  // for example "object_not_found", "path_blocked", "grasp_failed".
+  string reason = 2;
+  // Human-readable detail for logs and the operator.
+  string detail = 3;
+  // Wall time used by the skill.
+  google.protobuf.Duration elapsed = 4;
+}
+
+message Progress {
+  // 0.0 to 1.0. Use -1 if unknown.
+  float fraction = 1;
+  // Short phase name, for example "planning", "approaching", "grasping".
+  string phase = 2;
+  string message = 3;
+}
+
+// 3D vector. Meters unless stated otherwise.
+message Vector3 {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+// Unit quaternion.
+message Quaternion {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+  double w = 4;
+}
+
+message Pose {
+  Vector3 position = 1;
+  Quaternion orientation = 2;
+}
+
+// Pose with a coordinate frame (REP-105 names: "map", "odom", "base_link", ...).
+message PoseStamped {
+  string frame_id = 1;
+  google.protobuf.Timestamp stamp = 2;
+  Pose pose = 3;
+}
+
+// 2D pose on the floor, in frame "map". x, y in meters, yaw in radians.
+message Pose2D {
+  double x = 1;
+  double y = 2;
+  double yaw = 3;
+}
+
+// Oriented 3D box. Center pose plus full side lengths in meters.
+message BoundingBox3D {
+  PoseStamped center = 1;
+  Vector3 size = 2;
+}
+
+// Every MINDFRAME gRPC server also hosts:
+//   1. the standard gRPC health service (grpc.health.v1.Health), and
+//   2. ServiceInfoService below.
+// So health and version checks work the same way for every subsystem.
+service ServiceInfoService {
+  rpc GetServiceInfo(GetServiceInfoRequest) returns (GetServiceInfoResponse);
+}
+
+message GetServiceInfoRequest {}
+
+message GetServiceInfoResponse {
+  // Subsystem name, for example "iris".
+  string subsystem = 1;
+  // Semantic version of the service, for example "0.4.0".
+  string version = 2;
+  // Git commit of the build.
+  string git_commit = 3;
+  enum Backend {
+    BACKEND_UNSPECIFIED = 0;
+    BACKEND_REAL = 1;
+    BACKEND_SIM = 2;
+    BACKEND_REPLAY = 3;
+    BACKEND_MOCK = 4;
+  }
+  Backend backend = 4;
+  // Contract packages implemented, for example ["mindframe.perception.v1"].
+  repeated string contracts = 5;
+  // Free text: model names, config profile.
+  string detail = 6;
+}

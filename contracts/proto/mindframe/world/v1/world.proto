@@ -1,0 +1,158 @@
+syntax = "proto3";
+
+package mindframe.world.v1;
+
+import "google/protobuf/timestamp.proto";
+import "mindframe/common/v1/common.proto";
+
+// WorldModelService answers "where is X" questions and stores the semantic map.
+// Implemented by ATLAS. The live robot pose is also published as a ROS 2 stream
+// (see contracts/streams.yaml).
+service WorldModelService {
+  rpc ListRooms(ListRoomsRequest) returns (ListRoomsResponse);
+  rpc ListPlaces(ListPlacesRequest) returns (ListPlacesResponse);
+  rpc GetPlace(GetPlaceRequest) returns (GetPlaceResponse);
+
+  // Object memory. IRIS writes. CORTEX and GRIP read.
+  rpc UpsertObjects(UpsertObjectsRequest) returns (UpsertObjectsResponse);
+  rpc QueryObjects(QueryObjectsRequest) returns (QueryObjectsResponse);
+
+  // Compact summary for LLM grounding (CORTEX).
+  rpc GetWorldSummary(GetWorldSummaryRequest) returns (GetWorldSummaryResponse);
+
+  rpc GetLocalization(GetLocalizationRequest) returns (GetLocalizationResponse);
+  rpc SetInitialPose(SetInitialPoseRequest) returns (SetInitialPoseResponse);
+}
+
+message Room {
+  // Stable ID, snake_case, for example "kitchen".
+  string id = 1;
+  string display_name = 2;
+  // Floor polygon in frame "map". Meters (yaw unused).
+  repeated mindframe.common.v1.Pose2D polygon = 3;
+  // Other names people may use, for example ["lounge"].
+  repeated string aliases = 4;
+}
+
+enum PlaceType {
+  PLACE_TYPE_UNSPECIFIED = 0;
+  // Something objects can be placed on (table, counter, shelf).
+  PLACE_TYPE_SURFACE = 1;
+  // A location to stand at (door, charging spot).
+  PLACE_TYPE_WAYPOINT = 2;
+}
+
+message Place {
+  // Stable ID, snake_case, for example "kitchen_table".
+  string id = 1;
+  string display_name = 2;
+  string room_id = 3;
+  PlaceType type = 4;
+  // Center of the place in frame "map".
+  mindframe.common.v1.PoseStamped pose = 5;
+  // Where the robot should stand to work at this place. At least one for surfaces.
+  repeated mindframe.common.v1.Pose2D approach_poses = 6;
+  // Surface height above the floor. Meters. 0 for waypoints.
+  double surface_height = 7;
+  // Surface outline in frame "map" (yaw unused).
+  repeated mindframe.common.v1.Pose2D footprint = 8;
+  // Other names people may use, for example ["dining table"].
+  repeated string aliases = 9;
+}
+
+message ObjectInstance {
+  // Stable while tracked, for example "obj_17".
+  string id = 1;
+  // Class label in lower case, for example "cup".
+  string label = 2;
+  // Free text attributes, for example ["red", "ceramic"].
+  repeated string attributes = 3;
+  mindframe.common.v1.BoundingBox3D box = 4;
+  // 0.0 to 1.0.
+  float confidence = 5;
+  // ID of the place the object is on, if known.
+  string on_place_id = 6;
+  google.protobuf.Timestamp last_seen = 7;
+}
+
+enum LocalizationStatus {
+  LOCALIZATION_STATUS_UNSPECIFIED = 0;
+  LOCALIZATION_STATUS_LOCALIZED = 1;
+  LOCALIZATION_STATUS_LOST = 2;
+  LOCALIZATION_STATUS_INITIALIZING = 3;
+}
+
+message ListRoomsRequest {}
+
+message ListRoomsResponse {
+  repeated Room rooms = 1;
+}
+
+message ListPlacesRequest {
+  // Optional filters.
+  string room_id = 1;
+  PlaceType type = 2;
+}
+
+message ListPlacesResponse {
+  repeated Place places = 1;
+}
+
+message GetPlaceRequest {
+  string place_id = 1;
+}
+
+message GetPlaceResponse {
+  Place place = 1;
+}
+
+message UpsertObjectsRequest {
+  repeated ObjectInstance objects = 1;
+  // Writer name, for example "iris".
+  string source = 2;
+}
+
+message UpsertObjectsResponse {
+  uint32 updated = 1;
+}
+
+message QueryObjectsRequest {
+  // All filters optional.
+  string label = 1;
+  string on_place_id = 2;
+  string room_id = 3;
+  // Ignore objects not seen within this many seconds. 0 means no limit.
+  double max_age_s = 4;
+}
+
+message QueryObjectsResponse {
+  repeated ObjectInstance objects = 1;
+}
+
+message GetWorldSummaryRequest {}
+
+message GetWorldSummaryResponse {
+  repeated Room rooms = 1;
+  repeated Place places = 2;
+  repeated ObjectInstance objects = 3;
+  // Current room of the robot, if known.
+  string robot_room_id = 4;
+}
+
+message GetLocalizationRequest {}
+
+message GetLocalizationResponse {
+  LocalizationStatus status = 1;
+  mindframe.common.v1.PoseStamped pose = 2;
+  // Position standard deviation, meters.
+  double position_sigma = 3;
+  string map_id = 4;
+}
+
+message SetInitialPoseRequest {
+  mindframe.common.v1.Pose2D pose = 1;
+}
+
+message SetInitialPoseResponse {
+  mindframe.common.v1.SkillResult result = 1;
+}

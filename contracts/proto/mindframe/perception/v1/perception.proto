@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package mindframe.perception.v1;
+
+import "mindframe/common/v1/common.proto";
+import "mindframe/world/v1/world.proto";
+
+// PerceptionService finds objects and surfaces from camera data.
+// Implemented by IRIS.
+service PerceptionService {
+  // Skill: look for objects that match a text query.
+  // Streams zero or more progress events, then exactly one result.
+  rpc FindObjects(FindObjectsRequest) returns (stream FindObjectsResponse);
+  rpc CancelFindObjects(CancelFindObjectsRequest) returns (CancelFindObjectsResponse);
+
+  // Point cloud of one tracked object, for grasp planning.
+  rpc GetObjectCloud(GetObjectCloudRequest) returns (GetObjectCloudResponse);
+
+  // Free area on a support surface, for placing.
+  rpc GetSurface(GetSurfaceRequest) returns (GetSurfaceResponse);
+}
+
+message FindObjectsRequest {
+  mindframe.common.v1.RequestHeader header = 1;
+  // Open-vocabulary text, for example "cup" or "red mug".
+  string query = 2;
+  // Optional: limit search to objects on or near this place.
+  string place_id = 3;
+  // Stop after this many matches. 0 means no limit.
+  uint32 max_results = 4;
+  float min_confidence = 5;
+}
+
+message FindObjectsResponse {
+  oneof event {
+    mindframe.common.v1.Progress progress = 1;
+    FindObjectsResult result = 2;
+  }
+}
+
+message FindObjectsResult {
+  mindframe.common.v1.SkillResult result = 1;
+  // Sorted by confidence, highest first.
+  repeated mindframe.world.v1.ObjectInstance objects = 2;
+}
+
+message CancelFindObjectsRequest {
+  string request_id = 1;
+}
+
+message CancelFindObjectsResponse {
+  bool accepted = 1;
+}
+
+message GetObjectCloudRequest {
+  string object_id = 1;
+}
+
+message GetObjectCloudResponse {
+  mindframe.common.v1.SkillResult result = 1;
+  string frame_id = 2;
+  uint32 point_count = 3;
+  // Little-endian float32 [x0, y0, z0, x1, y1, z1, ...]. Meters.
+  bytes xyz = 4;
+  // Optional unit normals, same layout.
+  bytes normals = 5;
+}
+
+message GetSurfaceRequest {
+  string place_id = 1;
+}
+
+message GetSurfaceResponse {
+  mindframe.common.v1.SkillResult result = 1;
+  // Plane normal (unit) in frame "map".
+  mindframe.common.v1.Vector3 normal = 2;
+  // Plane offset d in n·p + d = 0. Meters.
+  double offset = 3;
+  // Height above floor, meters.
+  double height = 4;
+  // Free area polygon on the plane, in frame "map" (yaw unused).
+  repeated mindframe.common.v1.Pose2D free_area = 5;
+}

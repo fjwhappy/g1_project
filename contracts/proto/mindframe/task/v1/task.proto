@@ -1,0 +1,129 @@
+syntax = "proto3";
+
+package mindframe.task.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "mindframe/common/v1/common.proto";
+
+// TaskService turns a natural-language instruction into a plan and runs it.
+// Implemented by CORTEX. Used by HUB (operator console) and DOJO (benchmarks).
+service TaskService {
+  // Plan only. Does not move the robot. Used for review and for offline evaluation.
+  rpc PlanTask(PlanTaskRequest) returns (PlanTaskResponse);
+
+  // Plan (or use a given plan) and execute. Streams step updates.
+  rpc ExecuteTask(ExecuteTaskRequest) returns (stream ExecuteTaskResponse);
+
+  // Operator approval when the profile requires it.
+  rpc ApprovePlan(ApprovePlanRequest) returns (ApprovePlanResponse);
+
+  // Answer a clarification question asked by CORTEX.
+  rpc AnswerClarification(AnswerClarificationRequest) returns (AnswerClarificationResponse);
+
+  rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
+}
+
+message PlanStep {
+  // Step index, starting at 0.
+  uint32 index = 1;
+  // Skill name from contracts/skills.yaml, for example "navigate_to".
+  string skill = 2;
+  // Arguments as JSON object. Must match the skill schema.
+  google.protobuf.Struct args = 3;
+  // Optional variable name to store the step result, for example "cup".
+  string bind = 4;
+  // Short explanation for the operator.
+  string rationale = 5;
+}
+
+message Plan {
+  string plan_id = 1;
+  string instruction = 2;
+  string goal = 3;
+  repeated PlanStep steps = 4;
+  // Name and version of the planner and model, for reproducibility.
+  string planner = 5;
+}
+
+message PlanTaskRequest {
+  mindframe.common.v1.RequestHeader header = 1;
+  string instruction = 2;
+}
+
+message PlanTaskResponse {
+  mindframe.common.v1.SkillResult result = 1;
+  Plan plan = 2;
+  // Validator messages if the plan was rejected.
+  repeated string validation_errors = 3;
+  // If CORTEX needs more information before planning.
+  string clarification_question = 4;
+}
+
+message ExecuteTaskRequest {
+  mindframe.common.v1.RequestHeader header = 1;
+  oneof input {
+    string instruction = 2;
+    // Execute a given plan (for replay and tests).
+    Plan plan = 3;
+  }
+  bool require_approval = 4;
+}
+
+message StepUpdate {
+  uint32 index = 1;
+  enum State {
+    STATE_UNSPECIFIED = 0;
+    STATE_PENDING = 1;
+    STATE_RUNNING = 2;
+    STATE_SUCCEEDED = 3;
+    STATE_FAILED = 4;
+    STATE_SKIPPED = 5;
+  }
+  State state = 2;
+  mindframe.common.v1.SkillResult result = 3;
+  uint32 attempt = 4;
+}
+
+message ExecuteTaskResponse {
+  google.protobuf.Timestamp stamp = 1;
+  oneof event {
+    Plan plan_proposed = 2;
+    // Waiting for ApprovePlan.
+    string awaiting_approval_plan_id = 3;
+    StepUpdate step = 4;
+    // CORTEX changed the plan after a failure.
+    Plan replanned = 5;
+    string clarification_question = 6;
+    mindframe.common.v1.SkillResult final_result = 7;
+  }
+}
+
+message ApprovePlanRequest {
+  string task_id = 1;
+  string plan_id = 2;
+  bool approved = 3;
+  string operator = 4;
+}
+
+message ApprovePlanResponse {
+  bool accepted = 1;
+}
+
+message AnswerClarificationRequest {
+  string task_id = 1;
+  string answer = 2;
+}
+
+message AnswerClarificationResponse {
+  bool accepted = 1;
+}
+
+message CancelTaskRequest {
+  string task_id = 1;
+  string reason = 2;
+}
+
+message CancelTaskResponse {
+  bool accepted = 1;
+}

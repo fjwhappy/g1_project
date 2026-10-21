@@ -1,0 +1,98 @@
+syntax = "proto3";
+
+package mindframe.manipulation.v1;
+
+import "mindframe/common/v1/common.proto";
+import "mindframe/robot/v1/robot.proto";
+
+// ManipulationService picks and places objects. Implemented by GRIP.
+// GRIP sends arm and hand commands only through RobotService.
+service ManipulationService {
+  // Skills. Each streams zero or more progress events, then exactly one result.
+  rpc Pick(PickRequest) returns (stream PickResponse);
+  rpc Place(PlaceRequest) returns (stream PlaceResponse);
+  // Move the arm to a named pose: "home", "carry".
+  rpc MoveToNamedPose(MoveToNamedPoseRequest) returns (stream MoveToNamedPoseResponse);
+
+  // Cancel a running skill by request_id.
+  rpc CancelManipulation(CancelManipulationRequest) returns (CancelManipulationResponse);
+  rpc GetGripperState(GetGripperStateRequest) returns (GetGripperStateResponse);
+}
+
+message PickRequest {
+  mindframe.common.v1.RequestHeader header = 1;
+  // Object ID from PerceptionService / WorldModelService.
+  string object_id = 2;
+  // Optional: object box if the caller already has it. GRIP uses it as a prior.
+  mindframe.common.v1.BoundingBox3D object_box = 3;
+  // Optional label. Helps choose the grasp type, for example "cup".
+  string object_label = 4;
+  // ARM_UNSPECIFIED lets GRIP choose.
+  mindframe.robot.v1.Arm arm = 5;
+}
+
+message PickResponse {
+  oneof event {
+    mindframe.common.v1.Progress progress = 1;
+    PickResult result = 2;
+  }
+}
+
+message PickResult {
+  mindframe.common.v1.SkillResult result = 1;
+  mindframe.robot.v1.Arm arm_used = 2;
+  bool holding = 3;
+}
+
+message PlaceRequest {
+  mindframe.common.v1.RequestHeader header = 1;
+  oneof target {
+    // Surface place ID. GRIP asks PerceptionService for the free area.
+    string place_id = 2;
+    // Exact placement pose in frame "map".
+    mindframe.common.v1.PoseStamped pose = 3;
+  }
+  mindframe.robot.v1.Arm arm = 4;
+}
+
+message PlaceResponse {
+  oneof event {
+    mindframe.common.v1.Progress progress = 1;
+    PlaceResult result = 2;
+  }
+}
+
+message PlaceResult {
+  mindframe.common.v1.SkillResult result = 1;
+  mindframe.common.v1.PoseStamped placed_pose = 2;
+}
+
+message MoveToNamedPoseRequest {
+  mindframe.common.v1.RequestHeader header = 1;
+  string pose_name = 2;
+  mindframe.robot.v1.Arm arm = 3;
+}
+
+message MoveToNamedPoseResponse {
+  oneof event {
+    mindframe.common.v1.Progress progress = 1;
+    mindframe.common.v1.SkillResult result = 2;
+  }
+}
+
+message CancelManipulationRequest {
+  string request_id = 1;
+}
+
+message CancelManipulationResponse {
+  bool accepted = 1;
+}
+
+message GetGripperStateRequest {}
+
+message GetGripperStateResponse {
+  bool left_holding = 1;
+  bool right_holding = 2;
+  string left_object_id = 3;
+  string right_object_id = 4;
+}
